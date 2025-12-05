@@ -1,2 +1,6 @@
 contratkey
 contratkey.pub
+
+node_modules
+
+.env
