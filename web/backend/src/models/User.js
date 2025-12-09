@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import bcrypt from "bcryptjs";
 
 const userSchema = new mongoose.Schema(
     {
@@ -573,6 +574,8 @@ const userSchema = new mongoose.Schema(
         passwordResetExpires: Date,
         emailVerificationToken: String,
         emailVerificationExpires: Date,
+        phoneVerificationToken: String,
+        phoneVerificationExpires: Date,
 
         // Statistics
         stats: {
@@ -602,10 +605,6 @@ const userSchema = new mongoose.Schema(
 );
 
 // Indexes for performance
-userSchema.index({ email: 1 });
-userSchema.index({ phoneNumber: 1 });
-userSchema.index({ nickname: 1 });
-userSchema.index({ "currentLocation.coordinates": "2dsphere" });
 userSchema.index({ accountStatus: 1 });
 userSchema.index({ deletedAt: 1 });
 userSchema.index({ "driverProfile.driverRating": -1 });
@@ -660,7 +659,7 @@ userSchema.virtual("overallRating").get(function () {
     if (ratings.length === 0) {
         return 0;
     }
-    
+
     return ratings.reduce((a, b) => a + b, 0) / ratings.length;
 });
 
@@ -710,6 +709,57 @@ userSchema.pre("save", function (next) {
     }
     next();
 });
+
+userSchema.pre("save", async function(next) {
+    if (!this.isModified("password")) {
+        return next();
+    }
+
+    try {
+        const salt = await bcrypt.genSalt(10);
+        this.password = await bcrypt.hash(this.password, salt);
+        next();
+    } catch (error) {
+        next(error);
+    }
+});
+
+userSchema.pre("findOneAndUpdate", async function (next) {
+    const update = this.getUpdate();
+
+    if (!update) {
+        return next();
+    }
+
+    const newPassword = (update.password) || (update.$set && update.$set.password);
+
+    if (!newPassword) {
+        return next();
+    }
+
+    try {
+        const salt = await bcrypt.genSalt(10);
+        const hashed = await bcrypt.hash(newPassword, salt);
+
+        if (update.password) {
+            update.password = hashed;
+        } else if (update.$set && update.$set.password) {
+            update.$set.password = hashed;
+        } else if (update.$setOnInsert && update.$setOnInsert.password) {
+            update.$setOnInsert.password = hashed;
+        }
+
+        this.setUpdate(update);
+        next();
+    } catch (error) {
+        next(error);
+    }
+});
+
+userSchema.methods.matchPassword = async function (enteredPassword) {
+    const isPasswordCorrect = await bcrypt.compare(enteredPassword, this.password);
+    return isPasswordCorrect;
+};
 
 const User = mongoose.model("User", userSchema);
 
