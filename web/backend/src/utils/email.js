@@ -21,23 +21,21 @@ const createTransporter = () => {
     });
 };
 
-export const sendVerificationEmail = async (email, token, fullname) => {
+export const sendVerificationEmail = async (email, code, fullname) => {
     try {
         const transporter = createTransporter();
-
-        const verificationUrl = `${process.env.FRONTEND_URL}/verify-email/${token}`;
 
         const mailOptions = {
             from: `"${process.env.APP_NAME}" <${process.env.EMAIL_FROM}>`,
             to: email,
-            subject: "Verify your email address",
+            subject: "Your Verification Code",
             html: `
                 <!DOCTYPE html>
                 <html lang="en">
                 <head>
                     <meta charset="UTF-8">
                     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                    <title>Verify Your Email</title>
+                    <title>Verification Code</title>
                     <style>
                         * {
                             margin: 0;
@@ -81,45 +79,28 @@ export const sendVerificationEmail = async (email, token, fullname) => {
                             margin-bottom: 20px;
                             line-height: 1.8;
                         }
-                        .button-container {
+                        .code-container {
                             text-align: center;
                             margin: 35px 0;
+                            padding: 30px;
+                            background-color: #f8f9fa;
+                            border-radius: 12px;
+                            border: 2px dashed #667eea;
                         }
-                        .verify-button {
-                            display: inline-block;
-                            padding: 16px 40px;
-                            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                            color: #ffffff;
-                            text-decoration: none;
-                            border-radius: 8px;
-                            font-weight: 600;
-                            font-size: 16px;
-                            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
-                            transition: transform 0.2s;
+                        .code {
+                            font-size: 42px;
+                            font-weight: 700;
+                            letter-spacing: 8px;
+                            color: #667eea;
+                            font-family: 'Courier New', monospace;
+                            margin: 10px 0;
                         }
-                        .verify-button:hover {
-                            transform: translateY(-2px);
-                        }
-                        .divider {
-                            margin: 30px 0;
-                            border-bottom: 1px solid #e0e0e0;
-                        }
-                        .link-section {
-                            background-color: #f9f9f9;
-                            padding: 20px;
-                            border-radius: 8px;
-                            margin: 20px 0;
-                        }
-                        .link-section p {
+                        .code-label {
                             font-size: 14px;
                             color: #666666;
+                            text-transform: uppercase;
+                            letter-spacing: 2px;
                             margin-bottom: 10px;
-                        }
-                        .verification-link {
-                            word-break: break-all;
-                            color: #667eea;
-                            text-decoration: none;
-                            font-size: 14px;
                         }
                         .expiry-notice {
                             background-color: #fff3cd;
@@ -132,6 +113,10 @@ export const sendVerificationEmail = async (email, token, fullname) => {
                             color: #856404;
                             font-size: 14px;
                             margin: 0;
+                        }
+                        .divider {
+                            margin: 30px 0;
+                            border-bottom: 1px solid #e0e0e0;
                         }
                         .footer {
                             background-color: #f9f9f9;
@@ -148,15 +133,6 @@ export const sendVerificationEmail = async (email, token, fullname) => {
                             color: #667eea;
                             text-decoration: none;
                         }
-                        .social-links {
-                            margin-top: 20px;
-                        }
-                        .social-links a {
-                            display: inline-block;
-                            margin: 0 10px;
-                            color: #999999;
-                            text-decoration: none;
-                        }
                     </style>
                 </head>
                 <body>
@@ -167,22 +143,15 @@ export const sendVerificationEmail = async (email, token, fullname) => {
                         
                         <div class="content">
                             <h2>Hi ${fullname}! 👋</h2>
-                            <p>Thank you for signing up! We're excited to have you on board.</p>
-                            <p>To complete your registration and start using your account, please verify your email address by clicking the button below:</p>
+                            <p>Thank you for signing up! To complete your registration, please use the verification code below:</p>
                             
-                            <div class="button-container">
-                                <a href="${verificationUrl}" class="verify-button">Verify Email Address</a>
+                            <div class="code-container">
+                                <div class="code-label">Your Verification Code</div>
+                                <div class="code">${code}</div>
                             </div>
                             
                             <div class="expiry-notice">
-                                <p>⏰ <strong>Important:</strong> This verification link will expire in 30 minutes for security reasons.</p>
-                            </div>
-                            
-                            <div class="divider"></div>
-                            
-                            <div class="link-section">
-                                <p>If the button doesn't work, copy and paste this link into your browser:</p>
-                                <a href="${verificationUrl}" class="verification-link">${verificationUrl}</a>
+                                <p>⏰ <strong>Important:</strong> This verification code will expire in 30 minutes for security reasons.</p>
                             </div>
                             
                             <div class="divider"></div>
@@ -204,7 +173,7 @@ export const sendVerificationEmail = async (email, token, fullname) => {
         };
 
         const info = await transporter.sendMail(mailOptions);
-        console.log("Verification email sent successfully: ", info.messageId);
+        console.log("Verification code email sent successfully: ", info.messageId);
 
         if (process.env.NODE_ENV !== "production") {
             console.log("Preview URL: ", nodemailer.getTestMessageUrl(info));
