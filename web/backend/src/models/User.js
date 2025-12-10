@@ -572,10 +572,13 @@ const userSchema = new mongoose.Schema(
         lockUntil: Date,
         passwordResetToken: String,
         passwordResetExpires: Date,
-        emailVerificationToken: String,
-        emailVerificationExpires: Date,
-        phoneVerificationToken: String,
-        phoneVerificationExpires: Date,
+        verificationCode: String,
+        verificationExpires: Date,
+
+        verificationMethod: {
+            type: String,
+            enum: ["email", "phone"],
+        },
 
         // Statistics
         stats: {
