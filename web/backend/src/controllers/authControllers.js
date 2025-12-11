@@ -909,3 +909,63 @@ export const getMe = async (req, res) => {
         });
     }
 };
+
+export const signout = async (req, res) => {
+    try {
+        if (req.user) {
+            await User.findByIdAndUpdate(req.user.id, {
+                lastActive: Date.now(),
+            });
+        }
+
+        res.status(200).json({
+            success: true,
+            message: "Signed out successfully",
+        });
+
+    } catch (error) {
+        console.error("Sign out error:", error);
+        res.status(500).json({
+            success: false,
+            message: "Server error",
+        });
+    }
+};
+
+export const refreshToken = async (req, res) => {
+    try {
+        const user = await User.findById(req.user.id);
+
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                message: "User not found",
+            });
+        }
+
+        if (user.accountStatus !== "active") {
+            return res.status(403).json({
+                success: false,
+                message: "Account is not active",
+            });
+        }
+
+        const token = generateToken(user._id);
+
+        user.lastActive = Date.now();
+        await user.save();
+
+        res.status(200).json({
+            success: true,
+            message: "Token refreshed successfully",
+            token,
+        });
+
+    } catch (error) {
+        console.error("Refresh token error:", error);
+        res.status(500).json({
+            success: false,
+            message: "Server error",
+        });
+    }
+};
