@@ -1,5 +1,5 @@
 import User from "../models/User.js";
-import { sendVerificationEmail, sendWelcomeEmail } from "../utils/email.js";
+import { sendPasswordResetEmail, sendVerificationEmail, sendWelcomeEmail } from "../utils/email.js";
 import { generateToken, generateVerificationCode } from "../utils/generation.js";
 import { sendVerificationSMS } from "../utils/phone.js";
 
@@ -579,6 +579,330 @@ export const resendVerificationPhone = async (req, res) => {
 
     } catch (error) {
         console.error("Resend phone verification error: ", error);
+        res.status(500).json({
+            success: false,
+            message: "Server error",
+        });
+    }
+};
+
+export const signin = async (req, res) => {
+    try {
+        const {identifier, password} = req.body;
+
+        if (!identifier || !password) {
+            return res.status(400).json({
+                success: false,
+                message: "Please provide identifier (email/nickname/phone) and password",
+            });
+        }
+
+        const user = User.findOne({
+            $or: [
+                {email: identifier.toLowerCase()},
+                {nickname: identifier.toLowerCase()},
+                {phoneNumber: identifier},
+            ],
+
+            deletedAt: null
+        }).select("+password");
+
+        if (!user) {
+            return res.status(401).json({
+                success: false,
+                message: "Invalid credentials",
+            });
+        }
+
+        if (user.isLock()) {
+            return res.status(423).json({
+                success: false,
+                message: "Account is temporarily locked due to multiple failed login attempts",
+                lockUntil: user.lockUntil,
+            });
+        }
+
+        if (user.accountStatus === "suspended") {
+            return res.status(403).json({
+                success: false,
+                message: "Your account has been suspended. Please contact support",
+            });
+        }
+
+        if (user.accountStatus === "banned") {
+            return res.status(403).json({
+                success: false,
+                message: "Your account has been banned. Please contact support.",
+            });
+        }
+
+        if (user.accountStatus === "deactivated") {
+            return res.status(403).json({
+                success: false,
+                message: "Your account has been deactivate. Please contact support to reactivate",
+            });
+        }
+
+        const isPasswordCorrect = await user.matchPassword(password);
+
+        if (!isPasswordCorrect) {
+            await user.incLoginAttemps();
+
+            return res.status(401).json({
+                success: false,
+                message: "Invalid credentials",
+            });
+        }
+
+        if (user.accountStatus === "pending") {
+            return res.status(403).json({
+                success: false,
+                message: "Please verify your email or phone number before signing in",
+                needsVerification: true,
+                verificationMethod: user.verificationMethod,
+            });
+        }
+
+        if (user.loginAttempts > 0) {
+            user.loginAttempts = 0;
+            user.lockUntil = undefined;
+        }
+
+        user.lastLogin = Date.now();
+        user.lastActive = Date.now();
+        
+        await user.save();
+
+        const token = generateToken(user._id);
+
+        const userResponse = {
+            id: user._id,
+            fullname: user.fullname,
+            nickname: user.nickname,
+            email: user.email,
+            phoneNumber: user.phoneNumber,
+            profilePic: user.profilePic,
+            bio: user.bio,
+            dateOfBirth: user.dateOfBirth,
+            gender: user.gender,
+            accountStatus: user.accountStatus,
+            isOnboarded: user.isOnboarded,
+            roles: user.roles,
+            trustScore: user.trustScore,
+            verification: {
+                email: user.verification.email,
+                phone: user.verification.phone,
+                identity: user.verification.identity,
+            },
+            preferences: user.preferences,
+            createdAt: user.createdAt,
+        };
+
+        res.status(200).json({
+            success: true,
+            message: "Sign in successful",
+            user: userResponse,
+            token,
+        });
+
+    } catch (error) {
+        console.error("Sign in error: ", error);
+        res.status(500).json({
+            success: false,
+            message: "Server error during signing in",
+        });
+    }
+};
+
+export const forgotPassword = async (req, res) => {
+    try {
+        const {email} = req.body;
+
+        if (!email) {
+            return res.status(400).json({
+                success: false,
+                message: "Email is required",
+            });
+        }
+
+        const user = await User.findOne({
+            email: email.toLowerCase(),
+            deletedAt: null,
+        });
+
+        if (!user) {
+            return res.status(200).json({
+                success: true,
+                message: "If an account exists with this email, a password reset code will be sent",
+            });
+        }
+
+        const resetCode = generateVerificationCode();
+        const resetExpires = Date.now() + 30 * 60 * 1000;
+
+        user.passwordResetToken = resetCode;
+        user.passwordResetExpires = resetExpires;
+
+        await user.save();
+
+        try {
+            await sendPasswordResetEmail(user.email, resetCode, user.fullname);
+        } catch (error) {
+            console.error("Password reset email error: ", error);
+            return res.status(500).json({
+                success: false,
+                message: "Failed to send password reset email",
+            });
+        }
+
+        res.status(200).json({
+            success: true,
+            message: "If an account exists with this email, a password reset code will be sent",
+        });
+
+    } catch (error) {
+        console.error("Forgot password error: ", error);
+        res.status(500).json({
+            success: false,
+            message: "Server error",
+        });
+    }
+};
+
+export const verifyResetCode = async (req, res) => {
+    try {
+        const { email, code } = req.body;
+
+        if (!email || !code) {
+            return res.status(400).json({
+                success: false,
+                message: "Email and reset code are required",
+            });
+        }
+
+        const user = await User.findOne({
+            email: email.toLowerCase(),
+            passwordResetToken: code,
+            passwordResetExpires: { $gt: Date.now() },
+            deletedAt: null,
+        });
+
+        if (!user) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid or expired reset code",
+            });
+        }
+
+        res.status(200).json({
+            success: true,
+            message: "Reset code verified successfully",
+        });
+
+    } catch (error) {
+        console.error("Verify reset code error:", error);
+        res.status(500).json({
+            success: false,
+            message: "Server error",
+        });
+    }
+};
+
+export const resetPassword = async (req, res) => {
+    try {
+        const { email, code, newPassword } = req.body;
+
+        if (!email || !code || !newPassword) {
+            return res.status(400).json({
+                success: false,
+                message: "Email, reset code, and new password are required",
+            });
+        }
+
+        if (newPassword.length < 6) {
+            return res.status(400).json({
+                success: false,
+                message: "Password must be at least 6 characters long",
+            });
+        }
+
+        const user = await User.findOne({
+            email: email.toLowerCase(),
+            passwordResetToken: code,
+            passwordResetExpires: { $gt: Date.now() },
+            deletedAt: null,
+        });
+
+        if (!user) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid or expired reset code",
+            });
+        }
+
+        user.password = newPassword;
+        user.passwordResetToken = undefined;
+        user.passwordResetExpires = undefined;
+        user.loginAttempts = 0;
+        user.lockUntil = undefined;
+        await user.save();
+
+        res.status(200).json({
+            success: true,
+            message: "Password reset successfully. You can now sign in with your new password.",
+        });
+
+    } catch (error) {
+        console.error("Reset password error:", error);
+        res.status(500).json({
+            success: false,
+            message: "Server error",
+        });
+    }
+};
+
+export const getMe = async (req, res) => {
+    try {
+        const user = await User.findById(req.user.id)
+            .select('-password')
+            .populate('roles');
+
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                message: "User not found",
+            });
+        }
+
+        res.status(200).json({
+            success: true,
+            user: {
+                id: user._id,
+                fullname: user.fullname,
+                nickname: user.nickname,
+                email: user.email,
+                phoneNumber: user.phoneNumber,
+                profilePic: user.profilePic,
+                coverPhoto: user.coverPhoto,
+                bio: user.bio,
+                dateOfBirth: user.dateOfBirth,
+                gender: user.gender,
+                accountStatus: user.accountStatus,
+                isOnboarded: user.isOnboarded,
+                onboardingStep: user.onboardingStep,
+                roles: user.roles,
+                trustScore: user.trustScore,
+                verification: user.verification,
+                preferences: user.preferences,
+                currentLocation: user.currentLocation,
+                stats: user.stats,
+                createdAt: user.createdAt,
+                updatedAt: user.updatedAt,
+            },
+        });
+
+    } catch (error) {
+        console.error("Get me error:", error);
         res.status(500).json({
             success: false,
             message: "Server error",
