@@ -443,3 +443,173 @@ export const sendWelcomeEmail = async (email, fullname) => {
         throw error;
     }
 };
+
+export const sendPasswordResetEmail = async (email, code, fullname) => {
+    try {
+        const transporter = createTransporter();
+
+        const mailOptions = {
+            from: `"${process.env.APP_NAME}" <${process.env.EMAIL_FROM}>`,
+            to: email,
+            subject: "Password Reset Code",
+            html: `
+                <!DOCTYPE html>
+                <html lang="en">
+                <head>
+                    <meta charset="UTF-8">
+                    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                    <title>Password Reset</title>
+                    <style>
+                        * {
+                            margin: 0;
+                            padding: 0;
+                            box-sizing: border-box;
+                        }
+                        body {
+                            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+                            line-height: 1.6;
+                            color: #333333;
+                            background-color: #f4f4f4;
+                        }
+                        .email-wrapper {
+                            max-width: 600px;
+                            margin: 0 auto;
+                            background-color: #ffffff;
+                        }
+                        .header {
+                            background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+                            padding: 40px 30px;
+                            text-align: center;
+                        }
+                        .header h1 {
+                            color: #ffffff;
+                            font-size: 28px;
+                            margin: 0;
+                            font-weight: 600;
+                        }
+                        .content {
+                            padding: 40px 30px;
+                        }
+                        .content h2 {
+                            color: #333333;
+                            font-size: 24px;
+                            margin-bottom: 20px;
+                            font-weight: 600;
+                        }
+                        .content p {
+                            color: #666666;
+                            font-size: 16px;
+                            margin-bottom: 20px;
+                            line-height: 1.8;
+                        }
+                        .code-container {
+                            text-align: center;
+                            margin: 35px 0;
+                            padding: 30px;
+                            background-color: #fef3c7;
+                            border-radius: 12px;
+                            border: 2px dashed #f59e0b;
+                        }
+                        .code {
+                            font-size: 42px;
+                            font-weight: 700;
+                            letter-spacing: 8px;
+                            color: #d97706;
+                            font-family: 'Courier New', monospace;
+                            margin: 10px 0;
+                        }
+                        .code-label {
+                            font-size: 14px;
+                            color: #92400e;
+                            text-transform: uppercase;
+                            letter-spacing: 2px;
+                            margin-bottom: 10px;
+                        }
+                        .warning-box {
+                            background-color: #fee2e2;
+                            border-left: 4px solid #ef4444;
+                            padding: 20px;
+                            margin: 20px 0;
+                            border-radius: 4px;
+                        }
+                        .warning-box p {
+                            color: #991b1b;
+                            font-size: 14px;
+                            margin: 0;
+                        }
+                        .warning-box strong {
+                            color: #7f1d1d;
+                        }
+                        .divider {
+                            margin: 30px 0;
+                            border-bottom: 1px solid #e0e0e0;
+                        }
+                        .footer {
+                            background-color: #f9f9f9;
+                            padding: 30px;
+                            text-align: center;
+                            border-top: 1px solid #e0e0e0;
+                        }
+                        .footer p {
+                            color: #999999;
+                            font-size: 14px;
+                            margin: 5px 0;
+                        }
+                        .footer a {
+                            color: #f59e0b;
+                            text-decoration: none;
+                        }
+                    </style>
+                </head>
+                <body>
+                    <div class="email-wrapper">
+                        <div class="header">
+                            <h1>🔐 Password Reset Request</h1>
+                        </div>
+                        
+                        <div class="content">
+                            <h2>Hi ${fullname},</h2>
+                            <p>We received a request to reset your password. Use the code below to create a new password:</p>
+                            
+                            <div class="code-container">
+                                <div class="code-label">Your Reset Code</div>
+                                <div class="code">${code}</div>
+                            </div>
+                            
+                            <div class="warning-box">
+                                <p><strong>⚠️ Security Notice:</strong></p>
+                                <p>This code will expire in 1 hour. If you didn't request a password reset, please ignore this email and your password will remain unchanged. For your security, never share this code with anyone.</p>
+                            </div>
+                            
+                            <div class="divider"></div>
+                            
+                            <p style="font-size: 14px; color: #999999;">
+                                If you continue to have problems, please contact our support team.
+                            </p>
+                        </div>
+                        
+                        <div class="footer">
+                            <p><strong>${process.env.APP_NAME}</strong></p>
+                            <p>Need help? <a href="mailto:${process.env.SUPPORT_EMAIL}">Contact Support</a></p>
+                            <p>&copy; ${new Date().getFullYear()} ${process.env.APP_NAME}. All rights reserved.</p>
+                        </div>
+                    </div>
+                </body>
+                </html>
+            `,
+        };
+
+        const info = await transporter.sendMail(mailOptions);
+        console.log("Password reset code sent successfully:", info.messageId);
+
+        if (process.env.NODE_ENV !== "production") {
+            console.log("Preview URL:", nodemailer.getTestMessageUrl(info));
+        }
+
+        return info;
+
+    } catch (error) {
+        console.error("Error sending password reset email:", error);
+        throw error;
+    }
+};
